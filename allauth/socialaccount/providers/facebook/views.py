@@ -1,12 +1,14 @@
+import logging
+import requests
+
 from django.utils.cache import patch_response_headers
 from django.shortcuts import render
 
-import requests
 
-from allauth.socialaccount.models import SocialAccount, SocialLogin, SocialToken
+from allauth.socialaccount.models import (SocialLogin,
+                                          SocialToken)
 from allauth.socialaccount.helpers import complete_social_login
 from allauth.socialaccount.helpers import render_authentication_error
-from allauth.socialaccount.adapter import get_adapter
 from allauth.socialaccount import providers
 from allauth.socialaccount.providers.oauth2.views import (OAuth2Adapter,
                                                           OAuth2LoginView,
@@ -15,21 +17,19 @@ from allauth.socialaccount.providers.oauth2.views import (OAuth2Adapter,
 from .forms import FacebookConnectForm
 from .provider import FacebookProvider
 
-def fb_complete_login(app, token):
+
+logger = logging.getLogger(__name__)
+
+
+def fb_complete_login(request, app, token):
     resp = requests.get('https://graph.facebook.com/me',
-                        params={ 'access_token': token.token })
+                        params={'access_token': token.token})
+    resp.raise_for_status()
     extra_data = resp.json()
-    uid = extra_data['id']
-    user = get_adapter() \
-        .populate_new_user(email=extra_data.get('email'),
-                           username=extra_data.get('username'),
-                           first_name=extra_data.get('first_name'),
-                           last_name=extra_data.get('last_name'))
-    account = SocialAccount(uid=uid,
-                            provider=FacebookProvider.id,
-                            extra_data=extra_data,
-                            user=user)
-    return SocialLogin(account)
+    login = providers.registry \
+        .by_id(FacebookProvider.id) \
+        .sociallogin_from_response(request, extra_data)
+    return login
 
 
 class FacebookOAuth2Adapter(OAuth2Adapter):
@@ -40,7 +40,7 @@ class FacebookOAuth2Adapter(OAuth2Adapter):
     expires_in_key = 'expires'
 
     def complete_login(self, request, app, access_token, **kwargs):
-        return fb_complete_login(app, access_token)
+        return fb_complete_login(request, app, access_token)
 
 
 oauth2_login = OAuth2LoginView.adapter_view(FacebookOAuth2Adapter)
@@ -53,18 +53,29 @@ def login_by_token(request):
         form = FacebookConnectForm(request.POST)
         if form.is_valid():
             try:
+                provider = providers.registry.by_id(FacebookProvider.id)
+                login_options = provider.get_fb_login_options(request)
                 app = providers.registry.by_id(FacebookProvider.id) \
                     .get_app(request)
                 access_token = form.cleaned_data['access_token']
-                token = SocialToken(app=app,
-                                    token=access_token)
-                login = fb_complete_login(app, token)
-                login.token = token
-                login.state = SocialLogin.state_from_request(request)
-                ret = complete_social_login(request, login)
-            except:
-                # FIXME: Catch only what is needed
-                pass
+                if login_options.get('auth_type') == 'reauthenticate':
+                    info = requests.get(
+                        'https://graph.facebook.com/oauth/access_token_info',
+                        params={'client_id': app.client_id,
+                                'access_token': access_token}).json()
+                    nonce = provider.get_nonce(request, pop=True)
+                    ok = nonce and nonce == info.get('auth_nonce')
+                else:
+                    ok = True
+                if ok:
+                    token = SocialToken(app=app,
+                                        token=access_token)
+                    login = fb_complete_login(request, app, token)
+                    login.token = token
+                    login.state = SocialLogin.state_from_request(request)
+                    ret = complete_social_login(request, login)
+            except requests.RequestException:
+                logger.exception('Error accessing FB user profile')
     if not ret:
         ret = render_authentication_error(request)
     return ret

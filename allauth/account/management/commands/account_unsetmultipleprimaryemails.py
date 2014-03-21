@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db.models import Count
 
+from allauth.account.utils import user_email
 from allauth.utils import get_user_model
 from allauth.account.models import EmailAddress
 
@@ -24,7 +25,7 @@ class Command(BaseCommand):
                 user=user, primary=True)
 
         for primary_email_address in primary_email_addresses:
-            if primary_email_address.email == user.email:
+            if primary_email_address.email == user_email(user):
                 break
         else:
             # Didn't find the main email addresses and break the for loop

@@ -1,16 +1,40 @@
 from django.contrib import admin
+from django import forms
 
 from .models import SocialApp, SocialAccount, SocialToken
 
+from ..account import app_settings
+from ..utils import get_user_model
+
+User = get_user_model()
+
+
+class SocialAppForm(forms.ModelForm):
+    class Meta:
+        model = SocialApp
+        widgets = {
+            'client_id': forms.TextInput(attrs={'size': '100'}),
+            'key': forms.TextInput(attrs={'size': '100'}),
+            'secret': forms.TextInput(attrs={'size': '100'})
+        }
+
 
 class SocialAppAdmin(admin.ModelAdmin):
+    form = SocialAppForm
     list_display = ('name', 'provider',)
     filter_horizontal = ('sites',)
 
 
 class SocialAccountAdmin(admin.ModelAdmin):
+    search_fields = ['user__emailaddress__email'] + \
+        list(map(lambda a: 'user__' + a,
+             filter(lambda a: a and hasattr(User(), a),
+                    [app_settings.USER_MODEL_USERNAME_FIELD,
+                     'first_name',
+                     'last_name'])))
     raw_id_fields = ('user',)
     list_display = ('user', 'uid', 'provider')
+    list_filter = ('provider',)
 
 
 class SocialTokenAdmin(admin.ModelAdmin):

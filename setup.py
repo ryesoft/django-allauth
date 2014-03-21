@@ -1,9 +1,10 @@
 #!/usr/bin/env python
+import io
 import os
 import sys
 from fnmatch import fnmatchcase
 
-from setuptools import setup,find_packages
+from setuptools import setup, find_packages
 from distutils.util import convert_path
 
 # Provided as an attribute, so you can append to these instead
@@ -15,10 +16,11 @@ standard_exclude_directories = [
     "./example"
 ]
 
+
 # Copied from paste/util/finddata.py
 def find_package_data(where=".", package="", exclude=standard_exclude,
-        exclude_directories=standard_exclude_directories,
-        only_in_packages=True, show_ignored=False):
+                      exclude_directories=standard_exclude_directories,
+                      only_in_packages=True, show_ignored=False):
     """
     Return a dictionary suitable for use in ``package_data``
     in a distutils ``setup.py`` file.
@@ -56,7 +58,7 @@ def find_package_data(where=".", package="", exclude=standard_exclude,
                 bad_name = False
                 for pattern in exclude_directories:
                     if (fnmatchcase(name, pattern)
-                        or fn.lower() == pattern.lower()):
+                            or fn.lower() == pattern.lower()):
                         bad_name = True
                         if show_ignored:
                             print >> sys.stderr, (
@@ -66,20 +68,21 @@ def find_package_data(where=".", package="", exclude=standard_exclude,
                 if bad_name:
                     continue
                 if (os.path.isfile(os.path.join(fn, "__init__.py"))
-                    and not prefix):
+                        and not prefix):
                     if not package:
                         new_package = name
                     else:
                         new_package = package + "." + name
                     stack.append((fn, "", new_package, False))
                 else:
-                    stack.append((fn, prefix + name + "/", package, only_in_packages))
+                    stack.append((fn, prefix + name + "/", package,
+                                  only_in_packages))
             elif package or not only_in_packages:
                 # is a file
                 bad_name = False
                 for pattern in exclude:
                     if (fnmatchcase(name, pattern)
-                        or fn.lower() == pattern.lower()):
+                            or fn.lower() == pattern.lower()):
                         bad_name = True
                         if show_ignored:
                             print >> sys.stderr, (
@@ -96,21 +99,29 @@ excluded_directories = standard_exclude_directories
 
 package_data = find_package_data(exclude_directories=excluded_directories)
 
+test_requirements = []
 if sys.version_info[0] < 3:
     openid_package = 'python-openid >= 2.2.5'
+    test_requirements.append('mock >= 1.0.1')
 else:
     openid_package = 'python3-openid >= 3.0.1'
 
+long_description = io.open('README.rst', encoding='utf-8').read()
+
 METADATA = dict(
     name='django-allauth',
-    version='0.10.0',
+    version='0.16.1',
     author='Raymond Penners',
     author_email='raymond.penners@intenct.nl',
-    description='Integrated set of Django applications addressing authentication, registration, account management as well as 3rd party (social) account authentication.',
-    long_description=open('README.rst').read(),
+    description='Integrated set of Django applications addressing'
+    ' authentication, registration, account management as well as'
+    ' 3rd party (social) account authentication.',
+    long_description=long_description,
     url='http://github.com/pennersr/django-allauth',
-    keywords='django auth account social openid twitter facebook oauth registration',
-    install_requires=['django >= 1.4.3',
+    keywords='django auth account social openid twitter facebook oauth'
+    ' registration',
+    tests_require=test_requirements,
+    install_requires=['Django >= 1.4.3',
                       openid_package,
                       'requests-oauthlib >= 0.3.0',
                       'requests >= 1.0.3'],
